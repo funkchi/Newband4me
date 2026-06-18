@@ -48,9 +48,9 @@ main {
   transform: translateY(-2vh);
 }
 
-.folder {
-  width: 112px;
-  height: 88px;
+.hero-mark {
+  width: 128px;
+  height: 128px;
   fill: #fff;
   stroke: #0a0a0a;
   stroke-width: 3;
