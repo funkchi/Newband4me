@@ -3,8 +3,8 @@ import { resolveBand } from "./_lib.js";
 
 // GET /api/redirect -> 302 to today's Bandcamp page (or ?date=YYYY-MM-DD).
 // Future dates can't redirect, so they respond with the "<coming-soon>" text.
-export function onRequestGet({ request }) {
-  const { url, error } = resolveBand(request);
+export async function onRequestGet({ request, env }) {
+  const { url, error } = await resolveBand(request, env);
 
   if (error) {
     return new Response(error, { status: 400 });

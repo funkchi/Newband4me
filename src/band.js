@@ -1,7 +1,16 @@
-// Shared, environment-agnostic selection logic. Imported by the browser
-// (script.js) and by the Cloudflare Pages Functions. No DOM, no Node globals.
+// Pure, environment-agnostic helpers shared by the Cloudflare Pages Function
+// (src/discover.js) and the tests. No DOM, no Node globals, no fetch -- this
+// module stays synchronous so it is trivially testable. The live daily pick
+// is generated server-side; the list below is the failure-only fallback.
 
-export const bands = [
+const SALT = "Newband4me";
+
+// Sentinel returned for date lookups that fall after today (UTC).
+export const COMING_SOON = "<coming-soon>";
+
+// Used only when the live discover fetch fails (Bandcamp down, blocked, or
+// changes shape). Keeps the button working no matter what.
+export const FALLBACK_BANDS = [
   "https://alvvays.bandcamp.com",
   "https://blackcountrynewroad.bandcamp.com",
   "https://blackmidi.bandcamp.com",
@@ -29,13 +38,8 @@ export const bands = [
   "https://yves-tumor.bandcamp.com"
 ];
 
-const SALT = "Newband4me";
-
-// Sentinel returned for date lookups that fall after today (UTC).
-export const COMING_SOON = "<coming-soon>";
-
 // FNV-1a 32-bit hash.
-function hashValue(value) {
+export function hashValue(value) {
   let hash = 2166136261;
 
   for (let index = 0; index < value.length; index += 1) {
@@ -47,7 +51,7 @@ function hashValue(value) {
 }
 
 // mulberry32 seeded PRNG -> [0, 1).
-function mulberry32(seed) {
+export function mulberry32(seed) {
   let a = seed >>> 0;
 
   return function next() {
@@ -58,57 +62,18 @@ function mulberry32(seed) {
   };
 }
 
-// Deterministic Fisher-Yates shuffle of a copy.
-function seededShuffle(input, seed) {
-  const out = input.slice();
-  const rng = mulberry32(seed);
-
-  for (let i = out.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(rng() * (i + 1));
-    const tmp = out[i];
-    out[i] = out[j];
-    out[j] = tmp;
-  }
-
-  return out;
-}
-
-function utcDayNumber(date) {
+export function utcDayNumber(date) {
   return Math.floor(
     Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()) / 86400000
   );
 }
 
-// Shuffle order for a given cycle index. If the cycle's first pick would
-// repeat the previous cycle's last band, swap the first two picks. The swap
-// never touches the cycle's final slot, so each cycle's last band is the raw
-// shuffle's last band -- that keeps the guard O(1) (no recursion).
-function effectiveOrder(cycle) {
-  const order = seededShuffle(bands, hashValue(`${SALT}/${cycle}`));
-
-  if (cycle > 0 && bands.length > 1) {
-    const previousCycleLast = seededShuffle(
-      bands,
-      hashValue(`${SALT}/${cycle - 1}`)
-    )[bands.length - 1];
-
-    if (order[0] === previousCycleLast) {
-      const tmp = order[0];
-      order[0] = order[1];
-      order[1] = tmp;
-    }
-  }
-
-  return order;
-}
-
-export function bandOfTheDay(date = new Date()) {
+// Deterministic fallback pick from the curated list.
+export function fallbackBand(date = new Date()) {
   const day = utcDayNumber(date);
-  const n = bands.length;
-  const cycle = Math.floor(day / n);
-  const position = ((day % n) + n) % n;
+  const rotation = hashValue(SALT) % FALLBACK_BANDS.length;
 
-  return effectiveOrder(cycle)[position];
+  return FALLBACK_BANDS[(day + rotation) % FALLBACK_BANDS.length];
 }
 
 // A date is "future" when its UTC day-number is strictly greater than now's.

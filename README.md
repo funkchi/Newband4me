@@ -1,9 +1,19 @@
 # Newband4me
 
 A tiny daily portal to a Bandcamp band page. Every visitor gets the same band
-for a given UTC date.
+for a given UTC date. The pick is **generated live** from Bandcamp's random
+discover feed and frozen per day — not a fixed list.
 
 Live domain: [newband4me.com](https://newband4me.com)
+
+## How it works
+
+Each UTC day, the Worker asks Bandcamp's discover API for a random batch of
+releases (`s=rand`), picks one by a date-seeded index, and stores the band URL
+in **KV** under `band:YYYY-MM-DD`. Every request that day reads from KV, so all
+visitors agree and the upstream is hit only ~once per day. If the live fetch
+ever fails (Bandcamp down, blocked, or shape change), it falls back to a small
+curated list in `src/band.js` so the button always works.
 
 ## Deploy to Cloudflare Pages
 
@@ -17,7 +27,20 @@ There are no dependencies and no build step. The `functions/api/*` routes are
 served by [Pages Functions](https://developers.cloudflare.com/pages/functions/)
 automatically — no separate Worker to configure.
 
-Run `node test.js` to verify the daily-selection invariants.
+### KV binding (required)
+
+The generator needs a KV namespace for the per-day cache:
+
+1. **Workers & Pages → KV →** create a namespace, e.g. `BANDS`.
+2. **Pages project → Settings → Functions → KV namespace bindings →** add:
+   - Variable name: `BANDS_KV`
+   - KV namespace: `BANDS`
+
+Without the binding the site still works (curated fallback) but loses the
+"every visitor, same band" guarantee — KV is what freezes the day's pick.
+
+Run `node test.js` to verify the pure-logic invariants (the live fetch + KV
+path runs only in the Worker).
 
 After the first deployment, add `newband4me.com` under **Custom domains** in
 the Cloudflare Pages project. For the apex domain to resolve, Cloudflare Pages

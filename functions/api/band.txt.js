@@ -2,8 +2,8 @@ import { resolveBand, corsHeaders } from "./_lib.js";
 
 // GET /api/band.txt -> plain-text Bandcamp URL for today (or ?date=YYYY-MM-DD).
 // Returns "<coming-soon>" for future dates.
-export function onRequestGet({ request }) {
-  const { url, error } = resolveBand(request);
+export async function onRequestGet({ request, env }) {
+  const { url, error } = await resolveBand(request, env);
 
   if (error) {
     return new Response(error + "\n", {

@@ -1,16 +1,12 @@
-import {
-  bandOfTheDay,
-  parseUtcDate,
-  isFutureDate,
-  COMING_SOON
-} from "../../src/band.js";
+import { parseUtcDate, isFutureDate, COMING_SOON } from "../../src/band.js";
+import { generateBandOrFallback } from "../../src/discover.js";
 
 // Resolve the requested date and the band URL for it.
 // - Honors `?date=YYYY-MM-DD` (defaults to now, UTC).
 // - Returns { error } on a malformed date.
-// - Returns { date, url } where url is the Bandcamp page, or COMING_SOON
-//   when the requested date is strictly in the future.
-export function resolveBand(request) {
+// - Returns { date, url } where url is the Bandcamp page (generated live and
+//   frozen in KV), or COMING_SOON when the requested date is in the future.
+export async function resolveBand(request, env) {
   const requestUrl = new URL(request.url);
   let date = new Date();
 
@@ -24,7 +20,11 @@ export function resolveBand(request) {
     date = parsed;
   }
 
-  const url = isFutureDate(date) ? COMING_SOON : bandOfTheDay(date);
+  if (isFutureDate(date)) {
+    return { date, url: COMING_SOON };
+  }
+
+  const url = await generateBandOrFallback(date, env);
 
   return { date, url };
 }
