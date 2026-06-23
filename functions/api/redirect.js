@@ -1,13 +1,20 @@
-import { bandOfTheDay } from "../../src/band.js";
-import { resolveDate } from "./_lib.js";
+import { COMING_SOON } from "../../src/band.js";
+import { resolveBand } from "./_lib.js";
 
-// GET /api/redirect -> 302 straight to today's Bandcamp page (or ?date=YYYY-MM-DD).
+// GET /api/redirect -> 302 to today's Bandcamp page (or ?date=YYYY-MM-DD).
+// Future dates can't redirect, so they respond with the "<coming-soon>" text.
 export function onRequestGet({ request }) {
-  const { date, error } = resolveDate(request);
+  const { url, error } = resolveBand(request);
 
   if (error) {
     return new Response(error, { status: 400 });
   }
 
-  return Response.redirect(bandOfTheDay(date), 302);
+  if (url === COMING_SOON) {
+    return new Response(COMING_SOON + "\n", {
+      headers: { "content-type": "text/plain; charset=utf-8" }
+    });
+  }
+
+  return Response.redirect(url, 302);
 }

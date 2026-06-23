@@ -1,9 +1,9 @@
-import { bandOfTheDay } from "../../src/band.js";
-import { resolveDate, corsHeaders } from "./_lib.js";
+import { resolveBand, corsHeaders } from "./_lib.js";
 
 // GET /api/band.txt -> plain-text Bandcamp URL for today (or ?date=YYYY-MM-DD).
+// Returns "<coming-soon>" for future dates.
 export function onRequestGet({ request }) {
-  const { date, error } = resolveDate(request);
+  const { url, error } = resolveBand(request);
 
   if (error) {
     return new Response(error + "\n", {
@@ -12,7 +12,7 @@ export function onRequestGet({ request }) {
     });
   }
 
-  return new Response(bandOfTheDay(date) + "\n", {
+  return new Response(url + "\n", {
     headers: {
       "content-type": "text/plain; charset=utf-8",
       ...corsHeaders,

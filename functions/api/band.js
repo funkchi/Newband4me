@@ -1,14 +1,14 @@
-import { bandOfTheDay, dateKey } from "../../src/band.js";
-import { resolveDate, json } from "./_lib.js";
+import { dateKey } from "../../src/band.js";
+import { resolveBand, json } from "./_lib.js";
 
 // GET /api/band -> { date: "YYYY-MM-DD", url: "https://...bandcamp.com" }
-// Optional ?date=YYYY-MM-DD overrides "today".
+// `url` is "<coming-soon>" for future dates. ?date=YYYY-MM-DD overrides today.
 export function onRequestGet({ request }) {
-  const { date, error } = resolveDate(request);
+  const { date, url, error } = resolveBand(request);
 
   if (error) {
     return json({ error }, 400);
   }
 
-  return json({ date: dateKey(date), url: bandOfTheDay(date) });
+  return json({ date: dateKey(date), url });
 }

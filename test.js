@@ -1,6 +1,13 @@
 import { strict as assert } from "node:assert";
 import { test } from "node:test";
-import { bandOfTheDay, bands, parseUtcDate, dateKey } from "./src/band.js";
+import {
+  bandOfTheDay,
+  bands,
+  parseUtcDate,
+  dateKey,
+  isFutureDate,
+  COMING_SOON
+} from "./src/band.js";
 
 const URL_SHAPE = /^https:\/\/[a-z0-9-]+\.bandcamp\.com$/;
 const DAY = 86400000;
@@ -77,4 +84,17 @@ test("parseUtcDate rejects malformed input and validates calendar dates", () => 
   assert.equal(parseUtcDate("2026-13-01"), null);
   assert.equal(parseUtcDate("2026-02-31"), null);
   assert.ok(parseUtcDate("2026-06-18") instanceof Date);
+});
+
+test("isFutureDate flags only strictly-future UTC days", () => {
+  const now = new Date(Date.UTC(2026, 5, 23, 12, 0, 0));
+
+  assert.equal(isFutureDate(new Date(Date.UTC(2026, 5, 23)), now), false); // same day
+  assert.equal(isFutureDate(new Date(Date.UTC(2026, 5, 24)), now), true); // next day
+  assert.equal(isFutureDate(new Date(Date.UTC(2026, 5, 22)), now), false); // yesterday
+});
+
+test("COMING_SOON sentinel is a stable, distinct value", () => {
+  assert.equal(COMING_SOON, "<coming-soon>");
+  assert.ok(!bands.includes(COMING_SOON));
 });

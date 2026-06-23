@@ -31,6 +31,9 @@ export const bands = [
 
 const SALT = "Newband4me";
 
+// Sentinel returned for date lookups that fall after today (UTC).
+export const COMING_SOON = "<coming-soon>";
+
 // FNV-1a 32-bit hash.
 function hashValue(value) {
   let hash = 2166136261;
@@ -106,6 +109,11 @@ export function bandOfTheDay(date = new Date()) {
   const position = ((day % n) + n) % n;
 
   return effectiveOrder(cycle)[position];
+}
+
+// A date is "future" when its UTC day-number is strictly greater than now's.
+export function isFutureDate(date, now = new Date()) {
+  return utcDayNumber(date) > utcDayNumber(now);
 }
 
 // Parse a YYYY-MM-DD string as a UTC-midnight Date. Returns null if invalid.
