@@ -1,0 +1,6 @@
+# Local-only brand source templates (not served by the site)
+/assets/instagram-post-template.png
+/assets/social-media-banner.png
+
+# macOS
+.DS_Store
