@@ -22,7 +22,7 @@ playlist, no database to maintain.
 ```
 Browser                 Edge (Pages Functions)            Upstream
 ───────                 ───────────────────────           ────────
-curl / ───────────────────────────────>  client IP
+curl / ────────────────────────────> /api/band.txt ─┐
 index.html ─┐
 styles.css  │  static assets              /api/...  ─┐ fetch
 script.js ──┤  (served directly)       →  resolve   │ Bandcamp
@@ -56,7 +56,6 @@ functions/api/
   band.js               # GET /api/band      → JSON { date, url }
   band.txt.js           # GET /api/band.txt  → plain text
   redirect.js           # GET /api/redirect  → 302 to the band page
-functions/index.js      # GET / from HTTPS curl → client IP, browsers → index.html
 worker/router.js        # front door for newband4me.com/*, including plain HTTP curl
 wrangler.router.jsonc   # deploys the front-door Worker route
 test.js                 # node:test unit tests for the pure logic
@@ -133,20 +132,19 @@ Pages Functions map files to routes. `_lib.js` exports a shared `resolveBand`
 asynchronous resolver that does, in order: parse `?date=` → reject malformed →
 future dates become `COMING_SOON` → too-old dates error → otherwise ask the
 generator. The front-door Worker runs on `newband4me.com/*` before the request
-reaches Pages, so `curl newband4me.com` behaves like a tiny `ifconfig.me` even
-over plain HTTP. Normal browser/API requests are proxied to the Pages app.
+reaches Pages, so bare `curl newband4me.com` can return the plain-text band URL
+instead of being swallowed by Cloudflare Pages' default HTTP→HTTPS redirect.
+Normal browser/API requests are proxied to the Pages app.
 
 | Route | Returns |
 | --- | --- |
-| `worker/router.js`          | `GET /` from curl   → `200` client IP |
-| `functions/index.js`        | `GET /` on Pages    → client IP for HTTPS curl |
+| `worker/router.js`          | `GET /` from curl   → proxies to `/api/band.txt` |
 | `functions/api/band.js`     | `GET /api/band`     → `200` JSON `{ date, url }` |
 | `functions/api/band.txt.js` | `GET /api/band.txt` → `200` text/plain |
 | `functions/api/redirect.js` | `GET /api/redirect` → `302` to the band page |
 
-The band routes send `Access-Control-Allow-Origin: *` and honor
-`?date=YYYY-MM-DD`. The root IP response is `text/plain` with `Cache-Control:
-no-store`.
+The band routes send `Access-Control-Allow-Origin: *`, `text/plain` or JSON as
+appropriate, and honor `?date=YYYY-MM-DD`.
 
 ### 5 — Test the pure logic
 
@@ -189,23 +187,24 @@ Cloudflare needs the DNS record pointing it at `<project>.pages.dev`.
 
 ## API reference
 
-The root route returns the requester IP for CLI clients and the static app for
-normal browsers. The `/api/*` routes return today's band (UTC) and accept
-`?date=YYYY-MM-DD` to look up another day. Future dates return the sentinel
-`<coming-soon>`; dates older than the last 14 days return `400 Date out of
-range` (this bounds upstream cost — see *Limitations*).
+The root route returns today's band URL for CLI clients and the static app for
+normal browsers. The band routes use UTC and accept `?date=YYYY-MM-DD` to look
+up another day. Future dates return the sentinel `<coming-soon>`; dates older
+than the last 14 days return `400 Date out of range` (this bounds upstream cost
+— see *Limitations*).
 
 | Route | Response | Example |
 | --- | --- | --- |
-| `GET /` | client IP for curl; static site for browsers | `curl -L newband4me.com` |
+| `GET /` | plain-text URL for curl; static site for browsers | `curl newband4me.com` |
 | `GET /api/band` | JSON `{ date, url }` | `curl https://newband4me.com/api/band` |
 | `GET /api/band.txt` | plain-text URL | `curl https://newband4me.com/api/band.txt` |
 | `GET /api/redirect` | `302` to the Bandcamp page | `curl -sL https://newband4me.com/api/redirect` |
 
 ```sh
-curl -sL newband4me.com                                          # your IP
-curl -s https://newband4me.com/api/band.txt                      # today's band
-curl -s 'https://newband4me.com/api/band.txt?date=2026-06-29'    # a specific day
+curl -s newband4me.com                                           # today's band
+curl -s 'newband4me.com?date=2026-06-29'                         # a specific day
+curl -s --url-query date=2026-06-29 newband4me.com               # same, no URL quoting
+curl -s https://newband4me.com/api/band.txt                      # today's band, explicit API
 curl -s https://newband4me.com/api/band | jq                     # JSON
 ```
 
@@ -236,9 +235,15 @@ same Pages app.
 - **Free-tier ceilings.** Cloudflare Pages caps Function invocations and KV
   reads/writes per day. The per-day caching keeps upstream load to ~1 fetch/day;
   the 14-day date window caps the per-date cache-miss blast radius at 15 entries.
-- **Anti-abuse.** Beyond the date window, add a dashboard rate-limit rule:
-  **Security → WAF → Rate limiting rules** → `URI Path starts with "/api/"`,
-  count by IP, e.g. 30 requests / 10s → block. Tune to taste.
+- **Anti-abuse.** The 14-day date window still bounds cache misses to 15 active
+  date keys, but the front-door Worker changes what a public rate-limit rule
+  should match. Bare `curl newband4me.com` reaches the zone as `GET /` and only
+  then gets proxied by the Worker to `/api/band.txt`, so a rule that only checks
+  `URI Path starts with "/api/"` will not cover the root curl shortcut. In
+  **Security → WAF → Rate limiting rules**, match both the root shortcut and the
+  explicit API:
+  `(starts_with(http.request.uri.path, "/api/")) or (http.request.uri.path eq "/")`
+  Count by IP, e.g. 30 requests / 10s → block. Tune to taste.
 
 ## License
 
