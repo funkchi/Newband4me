@@ -13,6 +13,7 @@ import {
   COMING_SOON
 } from "./src/band.js";
 import { onRequestGet as rootGet } from "./functions/index.js";
+import { handleRequest as routerFetch } from "./worker/router.js";
 
 const URL_SHAPE = /^https:\/\/[a-z0-9-]+\.bandcamp\.com$/;
 
@@ -149,4 +150,48 @@ test("root route lets normal browser navigation render the static site", async (
 
   assert.equal(passedThrough, true);
   assert.equal(await response.text(), "<!doctype html>");
+});
+
+test("front-door worker returns IP for bare curl on HTTP", async () => {
+  const response = await routerFetch(
+    new Request("http://newband4me.com/", {
+      headers: {
+        "user-agent": "curl/8.7.1",
+        "cf-connecting-ip": "203.0.113.88"
+      }
+    })
+  );
+
+  assert.equal(response.status, 200);
+  assert.equal(await response.text(), "203.0.113.88\n");
+  assert.match(response.headers.get("content-type"), /^text\/plain/);
+  assert.equal(response.headers.get("cache-control"), "no-store");
+});
+
+test("front-door worker proxies normal browser requests to Pages", async () => {
+  const originalFetch = globalThis.fetch;
+  let proxiedUrl = "";
+
+  globalThis.fetch = async (request) => {
+    proxiedUrl = request.url;
+    return new Response("<!doctype html>", {
+      headers: { "content-type": "text/html; charset=utf-8" }
+    });
+  };
+
+  try {
+    const response = await routerFetch(
+      new Request("http://newband4me.com/?hello=world", {
+        headers: {
+          accept: "text/html,application/xhtml+xml",
+          "user-agent": "Mozilla/5.0"
+        }
+      })
+    );
+
+    assert.equal(proxiedUrl, "https://newband4me.pages.dev/?hello=world");
+    assert.equal(await response.text(), "<!doctype html>");
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });

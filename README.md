@@ -56,7 +56,9 @@ functions/api/
   band.js               # GET /api/band      → JSON { date, url }
   band.txt.js           # GET /api/band.txt  → plain text
   redirect.js           # GET /api/redirect  → 302 to the band page
-functions/index.js      # GET / from curl    → client IP, browsers → index.html
+functions/index.js      # GET / from HTTPS curl → client IP, browsers → index.html
+worker/router.js        # front door for newband4me.com/*, including plain HTTP curl
+wrangler.router.jsonc   # deploys the front-door Worker route
 test.js                 # node:test unit tests for the pure logic
 _headers                # security headers + long cache for /assets/*
 package.json            # { "type": "module" } so tests can use ESM
@@ -130,13 +132,14 @@ KV via `env.BANDS_KV`. `generateBandOrFallback(date, env)` wraps it in a
 Pages Functions map files to routes. `_lib.js` exports a shared `resolveBand`
 asynchronous resolver that does, in order: parse `?date=` → reject malformed →
 future dates become `COMING_SOON` → too-old dates error → otherwise ask the
-generator. The root Function special-cases command-line clients so
-`curl newband4me.com` behaves like a tiny `ifconfig.me`, while normal browser
-navigation falls through to `index.html`.
+generator. The front-door Worker runs on `newband4me.com/*` before the request
+reaches Pages, so `curl newband4me.com` behaves like a tiny `ifconfig.me` even
+over plain HTTP. Normal browser/API requests are proxied to the Pages app.
 
 | Route | Returns |
 | --- | --- |
-| `functions/index.js`        | `GET /` from curl   → `200` client IP |
+| `worker/router.js`          | `GET /` from curl   → `200` client IP |
+| `functions/index.js`        | `GET /` on Pages    → client IP for HTTPS curl |
 | `functions/api/band.js`     | `GET /api/band`     → `200` JSON `{ date, url }` |
 | `functions/api/band.txt.js` | `GET /api/band.txt` → `200` text/plain |
 | `functions/api/redirect.js` | `GET /api/redirect` → `302` to the band page |
@@ -206,10 +209,9 @@ curl -s 'https://newband4me.com/api/band.txt?date=2026-06-29'    # a specific da
 curl -s https://newband4me.com/api/band | jq                     # JSON
 ```
 
-> If Cloudflare's **Always Use HTTPS** redirect is enabled, a bare
-> `curl newband4me.com` still prints Cloudflare's `301` before this Function can
-> run. Use `curl -L newband4me.com`, include `https://`, or disable that redirect
-> if you want plain HTTP requests to return the IP directly.
+The front-door Worker prevents Cloudflare Pages' default HTTP→HTTPS redirect
+from swallowing bare curl requests. Browser and API requests still reach the
+same Pages app.
 
 ## Customization
 

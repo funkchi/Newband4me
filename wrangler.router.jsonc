@@ -1,0 +1,13 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "newband4me-router",
+  "main": "worker/router.js",
+  "compatibility_date": "2026-06-30",
+  "workers_dev": false,
+  "routes": [
+    {
+      "pattern": "newband4me.com/*",
+      "zone_name": "newband4me.com"
+    }
+  ]
+}
